@@ -1,0 +1,240 @@
+### first we need to remove other variants rather than SNPs like indels, mixed, mnp, symbolic and we need to check for duplicated snps
+#Niagara server
+
+#first I made a bim file from vcf
+module load plink
+plink --make-bed --recode --vcf gatk.final.vcf --allow-extra-chr --vcf-idspace-to - --out gatk.raw
+plink --make-bed --recode --vcf sam.final.vcf --allow-extra-chr --vcf-idspace-to - --out sam.raw
+
+#in bim file we have 6 columns: chrom, snp, pos_centimorgan, pos_bp, allele1, allele2
+#I downloaded the bim files of gatk and sam and changed the id columns in R
+#now we move to R on PC to find the common snps and change the snp ids
+
+####################################################################################################
+
+#finding the number of common variants and extract them
+
+#download bim files
+
+setwd("C:/Users/faara/OneDrive/Desktop/vcf_merge")
+
+gatk_raw <- read.table("gatk.raw.bim", header = F)
+sam_raw <- read.table("sam.raw.bim", header = F)
+
+#make snp id with chrom and pos
+gatk_raw$pos <- paste(gatk_raw$V1,gatk_raw$V4,sep = "_")
+sam_raw$pos <- paste(sam_raw$V1,sam_raw$V4,sep = "_")
+
+library(VennDiagram)
+venn.diagram(
+  x = list(gatk_raw$pos, gatk_raw$pos),
+  category.names = c("GATK raw","SAMTOOLS raw"),
+  filename = 'shared_snps.png',
+  output=T
+)
+
+common_snps <- merge(gatk_raw,sam_raw,by=c("pos"),all= FALSE, no.dups = TRUE)
+length(unique(common_snps$pos))
+
+#different numbers of variants in venn diagram and merging!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#there might be some duplication!? or same position for SNP/indels!?
+#remove all other variants except for snps, remove the duplicated snps, and come back again and merge the data
+
+####################################################################################################
+
+module load vcftools
+module load gcc
+module load bcftools
+
+bcftools view --types snps gatk.final.vcf > gatk.snp.vcf
+bcftools norm -d all gatk.snp.vcf -o gatk.snp.rd.vcf
+#keep only biallelic snps
+vcftools --vcf gatk.snp.rd.vcf \
+--min-alleles 2 \
+--max-alleles 2 \
+--recode --recode-INFO-all \
+--out  gatk.snp.rd.b
+
+bcftools view --types snps sam.final.vcf > sam.snp.vcf
+bcftools norm -d all sam.snp.vcf -o sam.snp.rd.vcf
+#keep only biallelic snps
+vcftools --vcf sam.snp.rd.vcf \
+--min-alleles 2 \
+--max-alleles 2 \
+--recode --recode-INFO-all \
+--out  sam.snp.rd.b
+
+#gatk file raw
+bcftools stats gatk.final.vcf
+
+#number of records: 19,257,450
+#number of snps: 15,102,221
+#number of indels: 4,348,505
+#number of others: 261,280
+
+#gatk file file after SNP extraction
+bcftools stats gatk.snp.vcf
+
+#number of records: 15,102,221
+#number of snps: 15,102,221
+#number of indels: 193,276 !!!!!!!!!!!!!!!!!!!!
+#number of others: 47,350 !!!!!!!!!!!!!!!!!!!!
+
+#gatk file file after remove duplicated SNPs (no duplicaiton!!!!!!)
+bcftools stats gatk.snp.rd.vcf
+
+#number of records: 15,102,221
+#number of snps: 15,102,221
+#number of indels: 193,276 !!!!!!!!!!!!!!!!!!!!
+#number of others: 47,350 !!!!!!!!!!!!!!!!!!!!
+
+#gatk file file after keeping biallelic snps
+bcftools stats gatk.snp.rd.b.recode.vcf
+
+#number of samples:	100
+#number of records:	14,559,895
+#number of no-ALTs:	0
+#number of SNPs:	14,559,895
+#number of MNPs:	0
+#number of indels:	0
+#number of others:	0
+#number of multiallelic sites:	0
+#number of multiallelic SNP sites:	0
+
+#samtools file raw
+bcftools stats sam.final.vcf
+
+#number of records: 17,595,114
+#number of snps: 13,468,882
+#number of indels: 4,126,232
+
+#samtools file after SNP extraction
+bcftools stats sam_snp.recode.vcf
+
+#number of records: 13,468,882
+#number of snps: 13,468,882
+#number of indels: 0
+
+#samtools file after remove duplicated SNPs (no duplicaiton!!!!!!)
+bcftools stats sam.snp.rd.vcf
+
+#number of records: 13,468,882
+#number of snps: 13,468,882
+#number of indels: 0
+
+#samtools file after keeping biallelic snps
+bcftools stats sam.snp.rd.b.recode.vcf
+
+#number of samples:	100
+#number of records:	13,175,465
+#number of no-ALTs:	0
+#number of SNPs:	13,175,465
+#number of MNPs:	0
+#number of indels:	0
+#number of others:	0
+#number of multiallelic sites:	0
+#number of multiallelic SNP sites:	0
+
+####################################################################################################
+
+#finding the number of common SNPs and extract them
+
+plink --make-bed --recode --vcf gatk.snp.rd.b.recode.vcf --allow-extra-chr --vcf-idspace-to - --out gatk.snp.rd.b
+plink --make-bed --recode --vcf sam.snp.rd.b.recode.vcf --allow-extra-chr --vcf-idspace-to - --out sam.snp.rd.b
+
+#download bim files
+
+setwd("C:/Users/faara/OneDrive/Desktop/vcf_merge")
+
+gatk_final <- read.table("gatk.raw.bim", header = F)
+sam_final <- read.table("sam.raw.bim", header = F)
+
+#make snp id with chrom and pos
+gatk_final$pos <- paste(gatk_final$V1,gatk_final$V4,sep = "_")
+sam_final$pos <- paste(sam_final$V1,sam_final$V4,sep = "_")
+
+library(VennDiagram)
+venn.diagram(
+  x = list(gatk_final$pos, gatk_final$pos),
+  category.names = c("GATK raw","SAMTOOLS raw"),
+  filename = 'shared_snps_final.png',
+  output=T
+)
+
+common_snps <- merge(gatk_final,sam_final,by=c("pos"),all= FALSE, no.dups = TRUE)
+length(unique(common_snps$pos))
+# still we have some repetitive snps
+
+####################################################################################################
+
+#I used bcftools to gain the chrom, snp, and genotypes
+
+bcftools query -f '%CHROM %POS  GTs:[ %GT]\n'  sam.snp.rd.b.recode.vcf > x.txt
+
+#Then I search for lines containing one of the duplicated snps
+grep -i '85305034' x.txt > y.txt 
+
+#Scaffold_104 85305034  GTs: 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/1 0/0 0/0 0/0 0/0
+#Scaffold_104 85305034  GTs: 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/1 0/0 0/0 0/0 0/0
+
+####################################################################################################
+
+#Since GATK file does not have duplicated SNPs, I used that to keep overlapped snps with samtools
+#Fisrt I made a new vcf file to change the SNP names to chr:pos:ref:alt using bcftools for both gatl and samtools files
+
+bcftools annotate --set-id +'%CHROM:%POS:%REF:%ALT' gatk.snp.rd.b.recode.vcf > gatk.snp.rd.b.upd.recode.vcf
+bcftools annotate --set-id +'%CHROM:%POS:%REF:%ALT' sam.snp.rd.b.recode.vcf > sam.snp.rd.b.upd.recode.vcf
+
+#Then I get the snp list for both files
+
+grep -v "^##" gatk.snp.rd.b.upd.recode.vcf | cut -f3 > gatk_list.txt
+grep -v "^##" sam.snp.rd.b.upd.recode.vcf | cut -f3 > sam_list.txt
+
+#Then I make a list of overlapped snps (over_snp_list.txt) in R to extract them using plink
+#put this file in the same directory
+#Now we can extract the overlapped snps using vcftools
+
+vcftools --vcf gatk.snp.rd.b.upd.recode.vcf --snps over_snp_list.txt --recode --recode-INFO-all --out gatk.snp.rd.b.upd.ol
+
+#GTAK QC
+
+gatk SelectVariants \
+ -R /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/ref/New_IDs.fasta \
+ -I /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.recode.vc \
+ -selectType SNP \
+ -O /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqc1.vcf
+
+gatk VariantFiltration \
+        -R /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/ref/New_IDs.fasta \
+        -V /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqc1.vcf \
+        -O /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqc2.vcf \
+        -filter-name "QD_filter" -filter "QD < 2.0" \
+        -filter-name "FS_filter" -filter "FS > 60.0" \
+        -filter-name "MQ_filter" -filter "MQ < 40.0" \
+        -filter-name "SOR_filter" -filter "SOR > 4.0" \
+        -filter-name "MQRankSum_filter" -filter "MQRankSum < -12.5" \
+        -filter-name "ReadPosRankSum_filter" -filter "ReadPosRankSum < -8.0"
+
+gatk SelectVariants \
+        --exclude-filtered \
+        -V /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqc2.vcf \
+        -O /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqcf.vcf
+
+#VCFTOOLS QC
+
+vcftools --vcf /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqcf.vcf \
+--remove-filtered-all --max-missing 0.90 --remove-indels --mac 2 \
+--min-alleles 2 --max-alleles 2 --maf 0.01 --hwe 0.0000001 \
+--recode --out gatk.snp.rd.b.upd.ol.gatkqcf.vtqc
+
+
+#Extracting 85 samples of CCFAR herd
+#getting samples list 
+bcftools query -l /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqcf.vtqc.recode.vcf > vcf_Sample_list.txt
+bcftools -S ccfar_sample_list.txt gatk.snp.rd.b.upd.ol.gatkqcf.vtqc.recode.vcf > ccfar_qc.vcf
+
+
+
+
+
+
