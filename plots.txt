@@ -1,0 +1,63 @@
+#fst
+
+setwd("C:/Users/faara/OneDrive/Desktop/ciep_circ/")
+
+fst <- read.table (file = 'ciep_fst.windowed.weir.fst', header = T)
+
+fst$win <- paste(fst$CHROM,fst$BIN_START,fst$BIN_END,sep = ":")
+fst <- fst[,c("CHROM","BIN_START","win","MEAN_FST")]
+fst$scaled_fst <- scale(fst$MEAN_FST, center = TRUE, scale = TRUE)
+
+fst$scaled_fst[fst$scaled_fst < 0] <- 0
+
+
+#Nucleotide diversity
+
+pi_pos <- read.table (file = 'ciep_nd_pos.windowed.pi', header = T)
+pi_neg <- read.table (file = 'ciep_nd_neg.windowed.pi', header = T)
+
+#calculating log theta pi
+
+pi_pos$win <- paste(pi_pos$CHROM,pi_pos$BIN_START,pi_pos$BIN_END,sep = ":")
+colnames(pi_pos)[5] <- "pi_pos"
+pi_neg$win <- paste(pi_neg$CHROM,pi_neg$BIN_START,pi_neg$BIN_END,sep = ":")
+colnames(pi_neg)[5] <- "pi_neg"
+
+pi <- merge(pi_pos,pi_neg, by=c("win"))
+
+pi <- pi[,c("CHROM.x","BIN_START.x","win","pi_pos","pi_neg")]
+
+pi$log2pi <- log2(pi$pi_neg/pi$pi_pos)
+
+#xpehh
+
+xp <- read.table (file = 'xpehh_ciep_p_q_val.txt', header = T)
+xp <- xp[,c("log","win")]
+
+#merge fst and nucleotide diveristy
+
+merge1 <- merge(fst,pi,by=c("win"))
+merge2 <- merge(xp,merge1,by=c("win"))
+
+
+CHR <- merge2[ ,c(3)]
+CHR <- as.numeric(CHR)
+BP <- merge2[ ,c(4)] 
+SNP <- merge2[ ,c(1)] 
+FST <- merge2[ ,c(6)] 
+ND <- merge2[ ,c(11)]
+XP <- merge2[ ,c(2)] 
+
+mydf <- data.frame (SNP, CHR, BP, FST, ND, XP)
+mydf <- mydf[!is.na(mydf$CHR), ]
+
+
+library("CMplot")
+CMplot(mydf,type="p",plot.type="c",r=0.4,cir.legend=TRUE,cir.legend.col="orange",
+       outward=FALSE,cir.chr.h=0.5,chr.den.col="black",file="jpg",
+       memo="",file.output=TRUE,verbose=TRUE,width=10,height=10,
+       LOG10=F,amplify= F, signal.line=NULL,col=matrix(c("#4DAF4A","olivedrab3",NA,"dodgerblue4",
+                                                         "deepskyblue",NA,"tomato1", "orange",NA), nrow=3, byrow=TRUE),
+       ylim=list(c(0,14), c(-4,5), c(0,12)),dpi=1200,cir.legend.cex=1,
+       chr.labels=paste(c("Chr1","Chr2","Chr3","Chr4","Chr5","Chr6","Chr7",
+                        "Chr8","Chr9","Chr10","Chr11","Chr12","Chr13","Chr14")))
