@@ -1,0 +1,452 @@
+### first we need to remove other variants rather than SNPs like indels, mixed, mnp, symbolic and we need to check for duplicated snps
+#Niagara server
+
+#first I made a bim file from vcf
+module load plink
+plink --make-bed --recode --vcf gatk.final.vcf --allow-extra-chr --vcf-idspace-to - --out gatk.raw
+plink --make-bed --recode --vcf sam.final.vcf --allow-extra-chr --vcf-idspace-to - --out sam.raw
+
+#in bim file we have 6 columns: chrom, snp, pos_centimorgan, pos_bp, allele1, allele2
+#I downloaded the bim files of gatk and sam and changed the id columns in R
+#now we move to R on PC to find the common snps and change the snp ids
+
+####################################################################################################
+
+#finding the number of common variants and extract them
+
+#download bim files
+
+setwd("C:/Users/faara/OneDrive/Desktop/vcf_merge")
+
+gatk_raw <- read.table("gatk.raw.bim", header = F)
+sam_raw <- read.table("sam.raw.bim", header = F)
+
+#make snp id with chrom and pos
+gatk_raw$pos <- paste(gatk_raw$V1,gatk_raw$V4,sep = "_")
+sam_raw$pos <- paste(sam_raw$V1,sam_raw$V4,sep = "_")
+
+library(VennDiagram)
+venn.diagram(
+  x = list(gatk_raw$pos, gatk_raw$pos),
+  category.names = c("GATK raw","SAMTOOLS raw"),
+  filename = 'shared_snps.png',
+  output=T
+)
+
+common_snps <- merge(gatk_raw,sam_raw,by=c("pos"),all= FALSE, no.dups = TRUE)
+length(unique(common_snps$pos))
+
+#different numbers of variants in venn diagram and merging!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#there might be some duplication!? or same position for SNP/indels!?
+#remove all other variants except for snps, remove the duplicated snps, and come back again and merge the data
+
+####################################################################################################
+
+module load vcftools
+module load gcc
+module load bcftools
+
+bcftools view --types snps gatk.final.vcf > gatk.snp.vcf
+bcftools norm -d all gatk.snp.vcf -o gatk.snp.rd.vcf
+#keep only biallelic snps
+vcftools --vcf gatk.snp.rd.vcf \
+--min-alleles 2 \
+--max-alleles 2 \
+--recode --recode-INFO-all \
+--out  gatk.snp.rd.b
+
+bcftools view --types snps sam.final.vcf > sam.snp.vcf
+bcftools norm -d all sam.snp.vcf -o sam.snp.rd.vcf
+#keep only biallelic snps
+vcftools --vcf sam.snp.rd.vcf \
+--min-alleles 2 \
+--max-alleles 2 \
+--recode --recode-INFO-all \
+--out  sam.snp.rd.b
+
+#gatk file raw
+bcftools stats gatk.final.vcf
+
+#number of records: 19,257,450
+#number of snps: 15,102,221
+#number of indels: 4,348,505
+#number of others: 261,280
+
+#gatk file file after SNP extraction
+bcftools stats gatk.snp.vcf
+
+#number of records: 15,102,221
+#number of snps: 15,102,221
+#number of indels: 193,276 !!!!!!!!!!!!!!!!!!!!
+#number of others: 47,350 !!!!!!!!!!!!!!!!!!!!
+
+#gatk file file after remove duplicated SNPs (no duplicaiton!!!!!!)
+bcftools stats gatk.snp.rd.vcf
+
+#number of records: 15,102,221
+#number of snps: 15,102,221
+#number of indels: 193,276 !!!!!!!!!!!!!!!!!!!!
+#number of others: 47,350 !!!!!!!!!!!!!!!!!!!!
+
+#gatk file file after keeping biallelic snps
+bcftools stats gatk.snp.rd.b.recode.vcf
+
+#number of samples:	100
+#number of records:	14,559,895
+#number of no-ALTs:	0
+#number of SNPs:	14,559,895
+#number of MNPs:	0
+#number of indels:	0
+#number of others:	0
+#number of multiallelic sites:	0
+#number of multiallelic SNP sites:	0
+
+#samtools file raw
+bcftools stats sam.final.vcf
+
+#number of records: 17,595,114
+#number of snps: 13,468,882
+#number of indels: 4,126,232
+
+#samtools file after SNP extraction
+bcftools stats sam_snp.recode.vcf
+
+#number of records: 13,468,882
+#number of snps: 13,468,882
+#number of indels: 0
+
+#samtools file after remove duplicated SNPs (no duplicaiton!!!!!!)
+bcftools stats sam.snp.rd.vcf
+
+#number of records: 13,468,882
+#number of snps: 13,468,882
+#number of indels: 0
+
+#samtools file after keeping biallelic snps
+bcftools stats sam.snp.rd.b.recode.vcf
+
+#number of samples:	100
+#number of records:	13,175,465
+#number of no-ALTs:	0
+#number of SNPs:	13,175,465
+#number of MNPs:	0
+#number of indels:	0
+#number of others:	0
+#number of multiallelic sites:	0
+#number of multiallelic SNP sites:	0
+
+####################################################################################################
+
+#finding the number of common SNPs and extract them
+
+plink --make-bed --recode --vcf gatk.snp.rd.b.recode.vcf --allow-extra-chr --vcf-idspace-to - --out gatk.snp.rd.b
+plink --make-bed --recode --vcf sam.snp.rd.b.recode.vcf --allow-extra-chr --vcf-idspace-to - --out sam.snp.rd.b
+
+#download bim files
+
+setwd("C:/Users/faara/OneDrive/Desktop/vcf_merge")
+
+gatk_final <- read.table("gatk.raw.bim", header = F)
+sam_final <- read.table("sam.raw.bim", header = F)
+
+#make snp id with chrom and pos
+gatk_final$pos <- paste(gatk_final$V1,gatk_final$V4,sep = "_")
+sam_final$pos <- paste(sam_final$V1,sam_final$V4,sep = "_")
+
+library(VennDiagram)
+venn.diagram(
+  x = list(gatk_final$pos, gatk_final$pos),
+  category.names = c("GATK raw","SAMTOOLS raw"),
+  filename = 'shared_snps_final.png',
+  output=T
+)
+
+common_snps <- merge(gatk_final,sam_final,by=c("pos"),all= FALSE, no.dups = TRUE)
+length(unique(common_snps$pos))
+# still we have some repetitive snps
+
+####################################################################################################
+
+#I used bcftools to gain the chrom, snp, and genotypes
+
+bcftools query -f '%CHROM %POS  GTs:[ %GT]\n'  sam.snp.rd.b.recode.vcf > x.txt
+
+#Then I search for lines containing one of the duplicated snps
+grep -i '85305034' x.txt > y.txt 
+
+#Scaffold_104 85305034  GTs: 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/1 0/0 0/0 0/0 0/0
+#Scaffold_104 85305034  GTs: 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/1 0/0 0/1 0/0 0/0 0/0 0/0
+
+####################################################################################################
+
+#Since GATK file does not have duplicated SNPs, I used that to keep overlapped snps with samtools
+#Fisrt I made a new vcf file to change the SNP names to chr:pos:ref:alt using bcftools for both gatl and samtools files
+
+bcftools annotate --set-id +'%CHROM:%POS:%REF:%ALT' gatk.snp.rd.b.recode.vcf > gatk.snp.rd.b.upd.recode.vcf
+bcftools annotate --set-id +'%CHROM:%POS:%REF:%ALT' sam.snp.rd.b.recode.vcf > sam.snp.rd.b.upd.recode.vcf
+
+#Then I get the snp list for both files
+
+grep -v "^##" gatk.snp.rd.b.upd.recode.vcf | cut -f3 > gatk_list.txt
+grep -v "^##" sam.snp.rd.b.upd.recode.vcf | cut -f3 > sam_list.txt
+
+#Then I make a list of overlapped snps (over_snp_list.txt) in R to extract them using plink
+#put this file in the same directory
+#Now we can extract the overlapped snps using vcftools
+
+vcftools --vcf gatk.snp.rd.b.upd.recode.vcf --snps over_snp_list.txt --recode --recode-INFO-all --out gatk.snp.rd.b.upd.ol
+
+#GTAK QC
+
+gatk SelectVariants \
+ -R /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/ref/New_IDs.fasta \
+ -I /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.recode.vc \
+ -selectType SNP \
+ -O /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqc1.vcf
+
+gatk VariantFiltration \
+        -R /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/ref/New_IDs.fasta \
+        -V /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqc1.vcf \
+        -O /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqc2.vcf \
+        -filter-name "QD_filter" -filter "QD < 2.0" \
+        -filter-name "FS_filter" -filter "FS > 60.0" \
+        -filter-name "MQ_filter" -filter "MQ < 40.0" \
+        -filter-name "SOR_filter" -filter "SOR > 4.0" \
+        -filter-name "MQRankSum_filter" -filter "MQRankSum < -12.5" \
+        -filter-name "ReadPosRankSum_filter" -filter "ReadPosRankSum < -8.0"
+
+gatk SelectVariants \
+        --exclude-filtered \
+        -V /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqc2.vcf \
+        -O /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqcf.vcf
+
+#VCFTOOLS QC
+
+vcftools --vcf /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/gatk.snp.rd.b.upd.ol.gatkqcf.vcf \
+--remove-filtered-all --max-missing 1 --remove-indels --mac 2 \
+--min-alleles 2 --max-alleles 2 --maf 0.05 --hwe 0.0000001 \
+--recode --out gatk.snp.rd.b.upd.ol.gatkqcf.vtqc
+
+
+#Extracting 85 samples of CCFAR herd
+#getting samples list 
+bcftools query -l /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/merg_qc/new_gatk_updated_snps/gatk.snp.rd.b.upd.ol.gatkqcf.vtqc.recode.vcf > vcf_Sample_list.txt
+bcftools view -S ccfar_sample_list.txt gatk.snp.rd.b.upd.ol.gatkqcf.vtqc.recode.vcf > ccfar_qc.vcf
+
+
+#estimation of fst
+module load vcftools
+
+vcftools --vcf /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/ccfar_qc.vcf \
+--weir-fst-pop /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/ciep_neg.txt \
+--weir-fst-pop /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/ciep_pos.txt \
+--fst-window-size 100000 --fst-window-step 20000 \
+--out ciep_fst
+
+#estimation of pi
+
+vcftools --vcf /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/ccfar_qc.vcf \
+--keep /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/ciep_pos.txt \
+--window-pi 100000 --window-pi-step 20000 \
+--out ciep_nd_pos
+
+vcftools --vcf /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/ccfar_qc.vcf \
+--keep /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/ciep_neg.txt \
+--window-pi 100000 --window-pi-step 20000 \
+--out ciep_nd_neg
+
+#estimation of Ne for Beagle using SNeP
+
+./SNeP1.1 -ped ccfar.ped \
+-map ccfar.map \
+-chr Scaffold_114
+
+#Ne=101
+
+
+#phasing and imputation using Beagle (we need phased and imputed data for xpehh)
+
+module load java
+java -Xmx80g -jar beagle.28Jun21.220.jar gt=/gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/ccfar_qc.vcf out=phased nthreads=80 ne=101
+
+bcftoold -d all phased.vcf -o phased.sort.vcf
+
+#running selscan chromosome by chromosome
+
+mkdir Scaffold_113
+
+cd /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/xpehh//Scaffold_113
+
+module load vcftools
+
+vcftools --vcf /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/phase/phased.sort.vcf \
+--keep /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/ciep_neg.txt \
+--chr Scaffold_113 \
+--recode --out ciep_neg_Scaffold_113
+
+vcftools --vcf /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/phase/phased.sort.vcf \
+--keep /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/ciep_pos.txt \
+--chr Scaffold_113 \
+--recode --out ciep_pos_Scaffold_113
+
+module load plink
+
+plink --vcf /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/xpehh/Scaffold_113/ciep_neg_Scaffold_113.recode.vcf \
+--recode --allow-extra-chr --out Scaffold_113 
+
+cd /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/selscan-2.0.0/bin/linux
+
+./selscan --xpehh \
+--vcf /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/xpehh/Scaffold_113/ciep_pos_Scaffold_113.recode.vcf \
+--vcf-ref /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/xpehh/Scaffold_113/ciep_neg_Scaffold_113.recode.vcf \
+--map /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/xpehh/Scaffold_113.map \
+--out /gpfs/fs0/scratch/y/ymiar/milad/Mink_VCF/signatures/CIEP/xpehh/Scaffold_113/Scaffold_113
+
+./norm --xpehh --files *.xpehh.out
+
+#I changed the scaffold names with chr numbers in both phased and unphased vcf files
+bcftools reheader --samples sampleid_list.txt ccfar_qc_chr_snp.vcf -o ccfar_qc_id_chr_snp.vcf
+
+#after getting the normalized xpehh results of each chromosomes, I downloaded all the chromosomes results and I used R commands to bind them together and 
+#I used a custome made python commands to get the averaged xpehh values in 100kb windows with 20kb steps and then I will use the MASS package in r to get 
+# the p-values
+
+############################################################################
+#binding all chromosomes results together in r
+
+setwd("C:/Users/faara/OneDrive/Desktop/xpehh_vp2/")
+
+chr14 <- read.table (file = 'Scaffold_100.xpehh.out.norm', header = T)
+chr14$chr <- 14
+chr14 <-chr14[,c(11,2,1,9)]
+
+chr10 <- read.table (file = 'Scaffold_101.xpehh.out.norm', header = T)
+chr10$chr <- 10
+chr10 <-chr10[,c(11,2,1,9)] 
+
+chr9 <- read.table (file = 'Scaffold_102.xpehh.out.norm', header = T)
+chr9$chr <- 9
+chr9 <-chr9[,c(11,2,1,9)] 
+
+chr8 <- read.table (file = 'Scaffold_104.xpehh.out.norm', header = T)
+chr8$chr <- 8
+chr8 <-chr8[,c(11,2,1,9)] 
+
+chr12 <- read.table (file = 'Scaffold_105.xpehh.out.norm', header = T)
+chr12$chr <- 12
+chr12 <-chr12[,c(11,2,1,9)] 
+
+chr13 <- read.table (file = 'Scaffold_106.xpehh.out.norm', header = T)
+chr13$chr <- 13
+chr13 <-chr13[,c(11,2,1,9)] 
+
+chr5 <- read.table (file = 'Scaffold_107.xpehh.out.norm', header = T)
+chr5$chr <- 5
+chr5 <-chr5[,c(11,2,1,9)] 
+
+chr11 <- read.table (file = 'Scaffold_108.xpehh.out.norm', header = T)
+chr11$chr <- 11
+chr11 <-chr11[,c(11,2,1,9)] 
+
+chr7 <- read.table (file = 'Scaffold_109.xpehh.out.norm', header = T)
+chr7$chr <- 7
+chr7 <-chr7[,c(11,2,1,9)] 
+
+chr6 <- read.table (file = 'Scaffold_110.xpehh.out.norm', header = T)
+chr6$chr <- 6
+chr6 <-chr6[,c(11,2,1,9)] 
+
+chr4 <- read.table (file = 'Scaffold_111.xpehh.out.norm', header = T)
+chr4$chr <- 4
+chr4 <-chr4[,c(11,2,1,9)] 
+
+chr3 <- read.table (file = 'Scaffold_112.xpehh.out.norm', header = T)
+chr3$chr <- 3
+chr3 <-chr3[,c(11,2,1,9)] 
+
+chr2 <- read.table (file = 'Scaffold_113.xpehh.out.norm', header = T)
+chr2$chr <- 2
+chr2 <-chr2[,c(11,2,1,9)] 
+
+chr1 <- read.table (file = 'Scaffold_114.xpehh.out.norm', header = T)
+chr1$chr <- 1
+chr1 <-chr1[,c(11,2,1,9)] 
+
+vp2 <- rbind(chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8
+             ,chr9,chr10,chr11,chr12,chr13,chr14)
+
+write.table(vp2,file = "xpehh_vp2.txt", row.names = F, quote = F)
+
+############################################################################
+#getting the average of nromalized xpehh value in 100kb windows with 20kb steps in python
+
+import pandas as pd
+import numpy as np
+
+XP = pd.read_csv('C:/Users/faara/OneDrive/Desktop/xpehh_vp2.txt',
+                 delimiter=r"\s+",
+                 header=0,
+                 dtype={'chr':str,'pos':int ,'id': str,'normxpehh': float})
+
+XP['range1'] = pd.cut(XP.pos, [x for x in range(1, XP.pos.max()+100000,100000)])
+XP['range2'] = pd.cut(XP.pos, [x for x in range(20001, XP.pos.max()+100000,100000)])
+XP['range3'] = pd.cut(XP.pos, [x for x in range(40001, XP.pos.max()+100000,100000)])
+XP['range4'] = pd.cut(XP.pos, [x for x in range(60001, XP.pos.max()+100000,100000)])
+XP['range5'] = pd.cut(XP.pos, [x for x in range(80001, XP.pos.max()+100000,100000)])
+
+
+A = XP[["range1","chr","normxpehh"]].groupby(["chr","range1"]).agg({"normxpehh":np.mean})
+A = A.reset_index().rename(columns={'range1': 'range'})
+
+B = XP[["range2","chr","normxpehh"]].groupby(["chr","range2"]).agg({"normxpehh":np.mean})
+B = B.reset_index().rename(columns={'range2': 'range'})
+
+C = XP[["range3","chr","normxpehh"]].groupby(["chr","range3"]).agg({"normxpehh":np.mean})
+C = C.reset_index().rename(columns={'range3': 'range'})
+
+D = XP[["range4","chr","normxpehh"]].groupby(["chr","range4"]).agg({"normxpehh":np.mean})
+D = D.reset_index().rename(columns={'range4': 'range'})
+
+E = XP[["range5","chr","normxpehh"]].groupby(["chr","range5"]).agg({"normxpehh":np.mean})
+E = E.reset_index().rename(columns={'range5': 'range'})
+
+out = pd.concat([A,B,C,D,E],sort=False).fillna(np.nan).replace(0.0, np.nan).dropna().reset_index()
+
+out['Start_pos'] = out.range.apply(lambda x:x.left)
+out['End_pos'] = out.range.apply(lambda x:x.right)
+
+out = out.drop(['range'], axis=1)
+
+out = out.sort_values(['chr', 'Start_pos','End_pos'], ascending=[True, True,True]).drop(['index'],axis=1)
+
+out = out[['chr', 'Start_pos','End_pos', 'normxpehh']]
+
+out.to_csv("C:/Users/faara/OneDrive/Desktop/xpehh_mean_vp2.txt", 
+             sep=' ',
+             header=True, 
+             index=False) 
+
+############################################################################
+#getting the pvalue and qvalue in R for the genomic windows
+
+data <- read.table (file = 'xpehh_mean_vp2.txt', header = T)
+
+data$abs_xp <- abs(data$normxpehh)
+
+library("MASS")
+
+model=rlm(data$abs_xp~1)
+summary(model)
+model$coefficients
+sqrt((1/116218 )*sum((model$residuals)**2))
+data$pval_xpehh <- pnorm(data$abs_xp, mean=  0.7082716,sd=0.5799336 ,lower.tail=F)
+data$qval_xpehh <- p.adjust(p=data$pval_xpehh, method="BH", n=length(data$pval_xpehh))
+
+write.table(data,file = "xpehh_vp2_p_q_val.txt", row.names = F, quote = F)
+
+############################################################################
+#gene annotation
+
+module load bedtools
+bedtools intersect -a overlaps_bed.txt -b GCF_020171115.1_ASM_NN_V1_genomic.gtf.gz -wb > overlaps_anot_result.txt
+
